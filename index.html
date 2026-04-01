@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>School Schedule Dashboard</title>
+    
+    <!-- Favicon and Home Screen Icons -->
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/BVPSapps/Schedules/main/Bulldog%20watch.png">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/BVPSapps/Schedules/main/Bulldog%20watch.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -48,8 +55,9 @@
     <header class="bg-white/80 backdrop-blur-md border-b sticky top-0 z-40 px-4 py-4 shadow-sm">
         <div class="max-w-md mx-auto flex justify-between items-center">
             <div class="flex items-center gap-2">
-                <div class="bg-blue-600 text-white w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg">
-                    <i class="fas fa-calendar-alt"></i>
+                <!-- App Logo from GitHub -->
+                <div class="w-10 h-10 rounded-2xl overflow-hidden shadow-lg border border-slate-100 flex items-center justify-center bg-white">
+                    <img src="https://raw.githubusercontent.com/BVPSapps/Schedules/main/Bulldog%20watch.png" alt="Bulldog Logo" class="w-full h-full object-contain p-1">
                 </div>
                 <h1 class="text-xl font-black text-slate-900 tracking-tight">ScheduleView</h1>
             </div>
@@ -205,8 +213,6 @@
                 }
             });
 
-            document.getElementById('debug-headers').innerText = JSON.stringify(dayMapping);
-
             if (dayMapping.length === 0) {
                 dayTabContainer.classList.add('hidden');
                 container.innerHTML = `<div class="text-center py-20 text-slate-400">Could not find Day columns in spreadsheet.</div>`;
@@ -217,7 +223,6 @@
                 activeDayKey = dayMapping[0].key;
             }
 
-            // Render Day Tabs
             document.getElementById('day-tabs').innerHTML = dayMapping.map(m => `
                 <button onclick="setDay('${m.key}')" 
                     class="px-6 py-3 rounded-xl text-xs font-black transition-all whitespace-nowrap border ${activeDayKey === m.key ? 'day-tab-active border-slate-800 shadow-lg' : 'bg-white text-slate-400 border-slate-100'}">
@@ -228,8 +233,6 @@
 
             let html = "";
             const timeCol = headers[0];
-
-            // Start at 0 if first row is a period, otherwise skip header row
             const startIdx = String(rawData[0][timeCol]).toUpperCase().includes('PERIOD') ? 0 : 1;
 
             for (let i = startIdx; i < rawData.length; i++) {
@@ -262,13 +265,38 @@
                     const pName = parts[0] || "Period";
                     const pTime = parts.slice(1).join(' ') || "";
 
-                    // ROOM NUMBER LOGIC: Check if bottomVal starts with a number (e.g. "116 TeacherName")
-                    let roomNumber = "";
-                    let teacherName = bottomVal;
-                    const roomMatch = bottomVal.match(/^(\d+)\s*(.*)/);
-                    if (roomMatch) {
-                        roomNumber = roomMatch[1];
-                        teacherName = roomMatch[2];
+                    let badgesHtml = "";
+                    let secondaryText = bottomVal;
+
+                    if (activeTab === 'students') {
+                        // Student logic: Room number is the whole leading digit string
+                        const numMatch = bottomVal.match(/^(\d+)\s*(.*)/);
+                        if (numMatch) {
+                            badgesHtml = `<span class="bg-blue-600 text-white text-[12px] px-3 py-1.5 rounded-xl font-black ml-2 whitespace-nowrap shadow-md">RM ${numMatch[1]}</span>`;
+                            secondaryText = numMatch[2];
+                        }
+                    } else {
+                        // Teacher logic: 116-7/8 Ferguson
+                        // First 3 digits are RM, then the dash part is GR
+                        const teacherMatch = bottomVal.match(/^(\d{3})-?(\d+\/?\d*)\s*(.*)/);
+                        if (teacherMatch) {
+                            const room = teacherMatch[1];
+                            const grade = teacherMatch[2];
+                            secondaryText = teacherMatch[3];
+                            badgesHtml = `
+                                <div class="flex gap-1.5 ml-2">
+                                    <span class="bg-blue-600 text-white text-[10px] px-2 py-1 rounded-lg font-black whitespace-nowrap shadow-sm">RM ${room}</span>
+                                    <span class="bg-slate-800 text-white text-[10px] px-2 py-1 rounded-lg font-black whitespace-nowrap shadow-sm">GR ${grade}</span>
+                                </div>
+                            `;
+                        } else {
+                            // Fallback if formatting is slightly different
+                            const numMatch = bottomVal.match(/^(\d+)\s*(.*)/);
+                            if (numMatch) {
+                                badgesHtml = `<span class="bg-blue-600 text-white text-[12px] px-3 py-1.5 rounded-xl font-black ml-2 whitespace-nowrap shadow-md">RM ${numMatch[1]}</span>`;
+                                secondaryText = numMatch[2];
+                            }
+                        }
                     }
 
                     html += `
@@ -278,11 +306,11 @@
                                 <span class="text-[9px] font-bold text-slate-400 tabular-nums leading-tight">${pTime}</span>
                             </div>
                             <div class="flex-1 overflow-hidden">
-                                <div class="text-sm font-black text-slate-900 mb-1 flex justify-between items-start">
+                                <div class="text-sm font-black text-slate-900 mb-1 flex justify-between items-center">
                                     <span class="truncate">${topVal || 'Empty'}</span>
-                                    ${roomNumber ? `<span class="bg-blue-600 text-white text-[11px] px-3 py-1 rounded-xl font-black ml-2 whitespace-nowrap shadow-sm">RM ${roomNumber}</span>` : ''}
+                                    ${badgesHtml}
                                 </div>
-                                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-tight truncate">${teacherName}</div>
+                                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-tight truncate">${secondaryText}</div>
                             </div>
                         </div>
                     `;
