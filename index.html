@@ -3,13 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>School Schedule Dashboard</title>
+    <title>ScheduleView</title>
     
-    <!-- Favicon and Home Screen Icons -->
+    <!-- Android / Chrome Primary Icon -->
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/BVPSapps/Schedules/main/Bulldog%20watch.png">
+    
+    <!-- iOS / Safari Home Screen Icon -->
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/BVPSapps/Schedules/main/Bulldog%20watch.png">
+    
+    <!-- Mobile Web App Meta -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ScheduleView">
+    <meta name="theme-color" content="#ffffff">
+
+    <!-- Web App Manifest (Critical for Android Shortcuts) -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJkZWZhdWx0X2xvY2FsZSI6ICJlbiIsCiAgIm5hbWUiOiAiU2NoZWR1bGVWaWV3IiwKICAic2hvcnRfbmFtZSI6ICJTY2hlZHVsZSIsCiAgImRlc2NyaXB0aW9uIjogIlNjaG9vbCBTY2hlZHVsZSBEYXNoYm9hcmQiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vQlZQU2FwcHMvU2NoZWR1bGVzL21haW4vQnVsbGRvZyUyMHdhdGNoLnBuZyIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0sCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmZmZmZmIiwKICAidGhlbWVfY29sb3IiOiAiIzI1NjNlYiIKfQ==">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -126,20 +135,23 @@
         let activeTab = 'students';
         let activeDayKey = '';
 
+        const funPlaceholders = [
+            "Recharging...", "Free Time!", "Mystery Period", "Bulldog Break", 
+            "Chill Zone", "Brain Rest", "Adventure Awaits", "Loading Fun...", 
+            "Catching Up", "Quiet Time"
+        ];
+
         window.onload = () => {
             updateClock();
             setInterval(updateClock, 1000);
             
-            // Speed Improvement: Load from cache immediately
             const cached = localStorage.getItem('schedule_cache');
             if (cached) {
                 try {
                     allData = JSON.parse(cached);
-                    const status = document.getElementById('status-pill');
-                    status.innerText = "Cached";
+                    document.getElementById('status-pill').innerText = "Cached";
                     populateDropdown();
                     
-                    // Restore previous selection if exists
                     const lastId = localStorage.getItem('last_selected_id');
                     const lastTab = localStorage.getItem('last_tab');
                     if (lastTab) switchTab(lastTab);
@@ -149,7 +161,6 @@
                     }
                 } catch(e) { console.error("Cache error", e); }
             }
-            
             loadData();
         };
 
@@ -161,32 +172,22 @@
             const icon = document.getElementById('refresh-icon');
             const status = document.getElementById('status-pill');
             icon.classList.add('fa-spin');
-            
             try {
                 const res = await fetch(apiEndpoint + "?cb=" + Date.now());
                 const newData = await res.json();
-                
-                // Update memory and cache
                 allData = newData;
                 localStorage.setItem('schedule_cache', JSON.stringify(newData));
-                
                 status.innerText = "Live";
                 status.className = "text-[10px] font-bold px-3 py-1.5 rounded-full border bg-green-50 text-green-600 border-green-100 uppercase";
-                
-                // Keep selection if possible
                 const currentVal = document.getElementById('group-selector').value;
                 populateDropdown();
-                if (currentVal) {
-                    document.getElementById('group-selector').value = currentVal;
-                }
+                if (currentVal) document.getElementById('group-selector').value = currentVal;
             } catch (err) {
                 if (!localStorage.getItem('schedule_cache')) {
                     status.innerText = "Error";
                     status.className = "text-[10px] font-bold px-3 py-1.5 rounded-full border bg-red-50 text-red-600 border-red-100 uppercase";
                 }
-            } finally {
-                icon.classList.remove('fa-spin');
-            }
+            } finally { icon.classList.remove('fa-spin'); }
         }
 
         function populateDropdown() {
@@ -202,8 +203,7 @@
         }
 
         function handleSelectorChange() {
-            const val = document.getElementById('group-selector').value;
-            localStorage.setItem('last_selected_id', val);
+            localStorage.setItem('last_selected_id', document.getElementById('group-selector').value);
             activeDayKey = ''; 
             renderSchedules();
         }
@@ -211,6 +211,16 @@
         function setDay(dayKey) {
             activeDayKey = dayKey;
             renderSchedules();
+        }
+
+        function getFunPlaceholder(seed) {
+            let hash = 0;
+            const str = String(seed);
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return funPlaceholders[Math.abs(hash) % funPlaceholders.length];
         }
 
         function renderSchedules() {
@@ -226,29 +236,21 @@
 
             const group = allData[activeTab].find(g => g.id === selectedId);
             if (!group) return;
-            
             const rawData = group.data || [];
             const fallbackRoom = group.defaultRoom || "";
             if (rawData.length === 0) return;
 
             const headers = Object.keys(rawData[0]);
             const firstRow = rawData[0];
-            
             let dayMapping = [];
             headers.forEach(h => {
                 const hClean = h.trim().toUpperCase();
                 const vClean = String(firstRow[h] || "").trim().toUpperCase();
                 if (hClean.includes('DAY') || vClean.includes('DAY')) {
                     const labelStr = vClean.includes('DAY') ? vClean : hClean;
-                    const dayNum = parseInt(labelStr.replace(/\D/g, "")) || 0;
-                    dayMapping.push({
-                        key: h,
-                        label: labelStr,
-                        sortVal: dayNum
-                    });
+                    dayMapping.push({ key: h, label: labelStr, sortVal: parseInt(labelStr.replace(/\D/g, "")) || 0 });
                 }
             });
-
             dayMapping.sort((a, b) => a.sortVal - b.sortVal);
 
             if (dayMapping.length === 0) {
@@ -257,9 +259,7 @@
                 return;
             }
 
-            if (!activeDayKey || !dayMapping.find(m => m.key === activeDayKey)) {
-                activeDayKey = dayMapping[0].key;
-            }
+            if (!activeDayKey || !dayMapping.find(m => m.key === activeDayKey)) activeDayKey = dayMapping[0].key;
 
             document.getElementById('day-tabs').innerHTML = dayMapping.map(m => `
                 <button onclick="setDay('${m.key}')" 
@@ -276,25 +276,18 @@
             for (let i = startIdx; i < rawData.length; i++) {
                 const row1 = rawData[i];
                 const row2 = rawData[i+1] || {};
-                
                 let timeVal = String(row1[timeCol] || "").trim();
                 let topVal = String(row1[activeDayKey] || "").trim();
                 let bottomVal = String(row2[activeDayKey] || "").trim();
 
                 if (!timeVal && !topVal) continue;
 
-                const isSpecial = timeVal.toLowerCase().includes('recess') || 
-                                  timeVal.toLowerCase().includes('lunch') || 
-                                  timeVal.toLowerCase().includes('entry') ||
-                                  timeVal.toLowerCase().includes('break') ||
-                                  topVal.toLowerCase().includes('recess') || 
-                                  topVal.toLowerCase().includes('lunch');
-
-                if (isSpecial) {
-                    html += `
-                        <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center card-appear">
-                            <span class="text-[11px] font-black text-emerald-700 uppercase tracking-widest">${timeVal || topVal}</span>
-                        </div>`;
+                if (timeVal.toLowerCase().includes('recess') || timeVal.toLowerCase().includes('lunch') || 
+                    timeVal.toLowerCase().includes('entry') || timeVal.toLowerCase().includes('break') ||
+                    topVal.toLowerCase().includes('recess') || topVal.toLowerCase().includes('lunch')) {
+                    html += `<div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center card-appear">
+                                <span class="text-[11px] font-black text-emerald-700 uppercase tracking-widest">${timeVal || topVal}</span>
+                             </div>`;
                     continue; 
                 }
 
@@ -302,16 +295,12 @@
                     const parts = timeVal.split(/[\n\r\t]{1,}| {2,}/).filter(p => p.trim().length > 0);
                     const pName = parts[0] || "Period";
                     const pTime = parts.slice(1).join(' ') || "";
-
                     let roomNum = "";
                     let displaySecondary = bottomVal;
 
                     if (activeTab === 'students') {
                         const numMatch = bottomVal.match(/^(\d+)\s*(.*)/);
-                        if (numMatch) {
-                            roomNum = numMatch[1];
-                            displaySecondary = numMatch[2];
-                        }
+                        if (numMatch) { roomNum = numMatch[1]; displaySecondary = numMatch[2]; }
                     } else {
                         if (bottomVal.includes('-')) {
                             const split = bottomVal.split('-');
@@ -319,17 +308,17 @@
                             displaySecondary = split.slice(1).join('-').trim();
                         } else {
                             const roomMatch = bottomVal.match(/\b\d{3}\b/);
-                            if (roomMatch) {
-                                roomNum = roomMatch[0];
-                                displaySecondary = bottomVal.replace(roomNum, '').trim();
-                            } else {
-                                roomNum = fallbackRoom;
-                                displaySecondary = bottomVal;
-                            }
+                            if (roomMatch) { roomNum = roomMatch[0]; displaySecondary = bottomVal.replace(roomNum, '').trim(); }
+                            else { roomNum = fallbackRoom; displaySecondary = bottomVal; }
                         }
                     }
 
-                    const badgeHtml = roomNum ? `<span class="bg-blue-600 text-white text-[12px] px-3 py-1.5 rounded-xl font-black ml-2 whitespace-nowrap shadow-md">RM ${roomNum}</span>` : "";
+                    const displaySubject = topVal || getFunPlaceholder(pName + activeDayKey + selectedId);
+                    
+                    // Logic: consistent black/bold fonts for Preps tab (all tabs now)
+                    // Logic: hide room bubble specifically for PREP periods
+                    const isPrep = displaySubject.toUpperCase() === "PREP";
+                    const badgeHtml = (roomNum && !isPrep) ? `<span class="bg-blue-600 text-white text-[12px] px-3 py-1.5 rounded-xl font-black ml-2 whitespace-nowrap shadow-md self-start">RM ${roomNum}</span>` : "";
 
                     html += `
                         <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-5 flex items-center gap-5 card-appear">
@@ -337,19 +326,18 @@
                                 <span class="text-[10px] font-black text-blue-600 uppercase mb-1">${pName}</span>
                                 <span class="text-[9px] font-bold text-slate-400 tabular-nums leading-tight">${pTime}</span>
                             </div>
-                            <div class="flex-1 overflow-hidden">
-                                <div class="text-sm font-black text-slate-900 mb-1 flex justify-between items-center">
-                                    <span class="truncate">${topVal || 'Empty'}</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-start gap-2 mb-1">
+                                    <span class="text-sm font-black text-slate-900">${displaySubject}</span>
                                     ${badgeHtml}
                                 </div>
-                                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-tight truncate">${displaySecondary}</div>
+                                <div class="text-[11px] font-black text-slate-400 uppercase tracking-tight break-words">${displaySecondary || "No description"}</div>
                             </div>
                         </div>
                     `;
                     i++; 
                 }
             }
-
             container.innerHTML = html || `<div class="text-center py-20 text-slate-400">No data rows found.</div>`;
         }
 
