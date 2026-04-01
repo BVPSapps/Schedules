@@ -129,6 +129,27 @@
         window.onload = () => {
             updateClock();
             setInterval(updateClock, 1000);
+            
+            // Speed Improvement: Load from cache immediately
+            const cached = localStorage.getItem('schedule_cache');
+            if (cached) {
+                try {
+                    allData = JSON.parse(cached);
+                    const status = document.getElementById('status-pill');
+                    status.innerText = "Cached";
+                    populateDropdown();
+                    
+                    // Restore previous selection if exists
+                    const lastId = localStorage.getItem('last_selected_id');
+                    const lastTab = localStorage.getItem('last_tab');
+                    if (lastTab) switchTab(lastTab);
+                    if (lastId) {
+                        document.getElementById('group-selector').value = lastId;
+                        handleSelectorChange();
+                    }
+                } catch(e) { console.error("Cache error", e); }
+            }
+            
             loadData();
         };
 
@@ -143,13 +164,26 @@
             
             try {
                 const res = await fetch(apiEndpoint + "?cb=" + Date.now());
-                allData = await res.json();
+                const newData = await res.json();
+                
+                // Update memory and cache
+                allData = newData;
+                localStorage.setItem('schedule_cache', JSON.stringify(newData));
+                
                 status.innerText = "Live";
                 status.className = "text-[10px] font-bold px-3 py-1.5 rounded-full border bg-green-50 text-green-600 border-green-100 uppercase";
+                
+                // Keep selection if possible
+                const currentVal = document.getElementById('group-selector').value;
                 populateDropdown();
+                if (currentVal) {
+                    document.getElementById('group-selector').value = currentVal;
+                }
             } catch (err) {
-                status.innerText = "Error";
-                status.className = "text-[10px] font-bold px-3 py-1.5 rounded-full border bg-red-50 text-red-600 border-red-100 uppercase";
+                if (!localStorage.getItem('schedule_cache')) {
+                    status.innerText = "Error";
+                    status.className = "text-[10px] font-bold px-3 py-1.5 rounded-full border bg-red-50 text-red-600 border-red-100 uppercase";
+                }
             } finally {
                 icon.classList.remove('fa-spin');
             }
@@ -168,6 +202,8 @@
         }
 
         function handleSelectorChange() {
+            const val = document.getElementById('group-selector').value;
+            localStorage.setItem('last_selected_id', val);
             activeDayKey = ''; 
             renderSchedules();
         }
@@ -189,6 +225,8 @@
             }
 
             const group = allData[activeTab].find(g => g.id === selectedId);
+            if (!group) return;
+            
             const rawData = group.data || [];
             const fallbackRoom = group.defaultRoom || "";
             if (rawData.length === 0) return;
@@ -211,7 +249,6 @@
                 }
             });
 
-            // Sort days Day 1, Day 2, etc.
             dayMapping.sort((a, b) => a.sortVal - b.sortVal);
 
             if (dayMapping.length === 0) {
@@ -276,20 +313,16 @@
                             displaySecondary = numMatch[2];
                         }
                     } else {
-                        // TEACHER ROOM LOGIC
                         if (bottomVal.includes('-')) {
-                            // Ferguson Format: "220 - 7/8 Ferguson"
                             const split = bottomVal.split('-');
                             roomNum = split[0].trim();
                             displaySecondary = split.slice(1).join('-').trim();
                         } else {
-                            // Ballik Format: Look for a 3-digit number first
                             const roomMatch = bottomVal.match(/\b\d{3}\b/);
                             if (roomMatch) {
                                 roomNum = roomMatch[0];
                                 displaySecondary = bottomVal.replace(roomNum, '').trim();
                             } else {
-                                // No 3-digit room found, use F1 defaultRoom from Apps Script
                                 roomNum = fallbackRoom;
                                 displaySecondary = bottomVal;
                             }
@@ -322,6 +355,7 @@
 
         function switchTab(tab) {
             activeTab = tab;
+            localStorage.setItem('last_tab', tab);
             document.getElementById('btn-students').className = tab === 'students' ? 'flex-1 py-3 text-[11px] font-extrabold rounded-xl transition-all tab-active uppercase' : 'flex-1 py-3 text-[11px] font-extrabold rounded-xl transition-all text-slate-500 uppercase';
             document.getElementById('btn-teachers').className = tab === 'teachers' ? 'flex-1 py-3 text-[11px] font-extrabold rounded-xl transition-all tab-active uppercase' : 'flex-1 py-3 text-[11px] font-extrabold rounded-xl transition-all text-slate-500 uppercase';
             activeDayKey = ''; 
