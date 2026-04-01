@@ -201,12 +201,18 @@
                 const hClean = h.trim().toUpperCase();
                 const vClean = String(firstRow[h] || "").trim().toUpperCase();
                 if (hClean.includes('DAY') || vClean.includes('DAY')) {
+                    const labelStr = vClean.includes('DAY') ? vClean : hClean;
+                    const dayNum = parseInt(labelStr.replace(/\D/g, "")) || 0;
                     dayMapping.push({
                         key: h,
-                        label: vClean.includes('DAY') ? vClean : hClean
+                        label: labelStr,
+                        sortVal: dayNum
                     });
                 }
             });
+
+            // Sort days Day 1, Day 2, etc.
+            dayMapping.sort((a, b) => a.sortVal - b.sortVal);
 
             if (dayMapping.length === 0) {
                 dayTabContainer.classList.add('hidden');
